@@ -1,51 +1,48 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { fetchRegions, fetchProgress, saveProgress } from "../lib/api";
+import { fetchRegions, fetchProgress } from "../lib/api";
 
 const AppContext = createContext(null);
+
+const STATUS_MAP = { completed: "selesai", in_progress: "berlangsung", not_started: "belum" };
 
 export function AppProvider({ children }) {
   const [regions, setRegions] = useState([]);
   const [progress, setProgress] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
-    const [reg, prog] = await Promise.all([fetchRegions(), fetchProgress()]);
-    setRegions(reg.regions);
-    setProgress(prog);
-    setLoading(false);
+    try {
+      const [reg, prog] = await Promise.all([fetchRegions(), fetchProgress()]);
+      setRegions(reg.regions);
+      setProgress(prog);
+      setError("");
+    } catch (e) {
+      setError("Gagal memuat aplikasi. Coba lagi.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const recordProgress = useCallback(async (payload) => {
-    const data = await saveProgress(payload);
-    setProgress((prev) => ({
-      ...(prev || {}),
-      regions_explored: data.regions_explored,
-      regions_completed: data.regions_completed,
-      stories: data.stories,
-      collectibles: data.collectibles,
-      stats: data.stats,
-    }));
-    return data;
-  }, []);
-
   const statusOf = useCallback(
     (slug) => {
-      if (!progress) return "belum";
-      if (progress.regions_completed?.includes(slug)) return "selesai";
-      if (progress.regions_explored?.includes(slug)) return "berlangsung";
-      return "belum";
+      const status = progress?.provinces?.[slug]?.status;
+      return STATUS_MAP[status] || "belum";
     },
     [progress]
   );
 
+  const provinceProgress = useCallback(
+    (slug) => progress?.provinces?.[slug] || null,
+    [progress]
+  );
+
   return (
-    <AppContext.Provider
-      value={{ regions, progress, loading, refresh, recordProgress, statusOf }}
-    >
+    <AppContext.Provider value={{ regions, progress, loading, error, refresh, statusOf, provinceProgress }}>
       {children}
     </AppContext.Provider>
   );

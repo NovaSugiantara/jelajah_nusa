@@ -1,12 +1,12 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./App.css";
 import { AppProvider } from "./context/AppContext";
 import Header from "./components/Header";
-import Home from "./pages/Home";
+import Landing from "./pages/Landing";
+import ExploreMap from "./pages/ExploreMap";
 import StoryPage from "./pages/StoryPage";
 import Passport from "./pages/Passport";
-import Suara from "./pages/Suara";
 
 function Footer() {
   return (
@@ -25,10 +25,11 @@ export default function App() {
           <Header />
           <main>
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<Landing />} />
+              <Route path="/jelajah" element={<ExploreMap />} />
               <Route path="/jelajah/:slug" element={<StoryPage />} />
               <Route path="/passport" element={<Passport />} />
-              <Route path="/suara" element={<Suara />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
           <Footer />

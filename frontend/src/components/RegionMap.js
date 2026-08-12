@@ -129,10 +129,6 @@ export default function RegionMap({ regions, statusOf, onSelect }) {
               onClick={() => onSelect(r.slug)}
               onMouseEnter={() => setHover(r.slug)}
               onMouseLeave={() => setHover(null)}
-              role="button"
-              tabIndex={0}
-              aria-label={`${r.name} — ${STATUS_LABEL[status]}`}
-              onKeyDown={(e) => e.key === "Enter" && onSelect(r.slug)}
             />
           );
         })}
@@ -159,7 +155,12 @@ export default function RegionMap({ regions, statusOf, onSelect }) {
               tabIndex={0}
               aria-label={`${r.name} — ${STATUS_LABEL[status]}`}
               data-testid={`map-pin-${r.slug}`}
-              onKeyDown={(e) => e.key === "Enter" && onSelect(r.slug)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(r.slug);
+                }
+              }}
             >
               {isActive && (
                 <circle cx={cx} cy={cy} r="12" fill="#c1272d" opacity="0.18">

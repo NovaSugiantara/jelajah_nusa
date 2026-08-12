@@ -1,30 +1,80 @@
-"""Structured content for Jelajah Nusa — 8 provinsi.
+"""Structured seed content for Jelajah Nusa.
 
 Content is kept as structured data (not embedded in UI), per product guardrails.
 Each region has: metadata, an accent identity, one story graph (scenes -> one
 decision with 2 choices -> two sourced discoveries) and exactly one collectible.
+
+The raw literals below carry a legacy shape (`source` label string, plain
+`image` URLs). `normalize_region()` converts them into the governance contract:
+structured `sources` with URLs, `ReviewedAsset` images with alt text, and
+`review.status` metadata. Every region is seeded as `draft` until a relevant
+expert/local reviewer approves it.
 """
 
-# Explorer levels keyed by number of completed regions (milestones 2/4/6/8).
-EXPLORER_LEVELS = [
-    {"min": 0, "title": "Musafir Baru", "note": "Perjalananmu baru dimulai."},
-    {"min": 1, "title": "Penjelajah Muda", "note": "Kamu mulai mengenal Nusantara."},
-    {"min": 2, "title": "Penjelajah", "note": "Milestone pertama — dua wilayah dijelajahi."},
-    {"min": 4, "title": "Penjelajah Ahli", "note": "Setengah Nusantara sudah kamu susuri."},
-    {"min": 6, "title": "Penjaga Cerita", "note": "Enam wilayah, enam kisah tersimpan."},
-    {"min": 8, "title": "Duta Nusantara", "note": "Kamu mengenal seluruh delapan wilayah."},
-]
+import copy
 
-MILESTONES = [2, 4, 6, 8]
+# Domain-level landing pages for the institutions cited in story sources.
+SOURCE_BASE_URLS = {
+    "kemdikbud": "https://www.kemdikbud.go.id",
+    "badan bahasa": "https://badanbahasa.kemdikbud.go.id",
+    "warisan budaya": "https://warisanbudaya.kemdikbud.go.id",
+    "unesco": "https://whc.unesco.org",
+    "bnpb": "https://bnpb.go.id",
+    "cnn": "https://edition.cnn.com/travel",
+    "dinas kebudayaan dki jakarta": "https://jakarta.go.id",
+    "kementerian pupr": "https://pu.go.id",
+    "conservation international": "https://www.conservation.org",
+}
 
 
-def explorer_level(completed_count: int) -> dict:
-    level = EXPLORER_LEVELS[0]
-    for lv in EXPLORER_LEVELS:
-        if completed_count >= lv["min"]:
-            level = lv
-    idx = EXPLORER_LEVELS.index(level)
-    return {"index": idx, "title": level["title"], "note": level["note"]}
+def _source_url(label: str):
+    low = label.lower()
+    for key, url in SOURCE_BASE_URLS.items():
+        if key in low:
+            return url
+    return None
+
+
+def normalize_region(r: dict) -> dict:
+    """Return a copy of the region in the reviewed-asset/content contract."""
+    reg = copy.deepcopy(r)
+    for n in reg["story"]["nodes"].values():
+        if n.get("image"):
+            n["image"] = {
+                "src": n["image"],
+                "alt": f"Ilustrasi perjalanan di {reg['name']}",
+                "review": {"status": "draft"},
+            }
+        if n["type"] == "discovery":
+            label = n.pop("source", "").replace("Sumber: ", "").strip()
+            n["sources"] = [{"label": label, "url": _source_url(label)}]
+            n["review"] = {"status": "draft"}
+    image = reg.pop("image")
+    reg["thumbnail"] = {
+        "src": image,
+        "alt": f"Kartu wilayah {reg['name']}",
+        "review": {"status": "draft"},
+    }
+    reg["collectible"]["image"] = {
+        "src": image,
+        "alt": f"Collectible {reg['collectible']['name']}",
+        "review": {"status": "draft"},
+    }
+    reg["review"] = {"status": "draft"}
+    return reg
+
+
+def is_approved(reg: dict) -> bool:
+    """True when every discovery, thumbnail, and collectible is approved."""
+    checks = [reg.get("review", {}).get("status")]
+    checks.append(reg.get("thumbnail", {}).get("review", {}).get("status"))
+    checks.append(reg.get("collectible", {}).get("image", {}).get("review", {}).get("status"))
+    for n in reg.get("story", {}).get("nodes", {}).values():
+        if n.get("review"):
+            checks.append(n["review"].get("status"))
+        if n.get("image"):
+            checks.append(n["image"].get("review", {}).get("status"))
+    return all(c == "approved" for c in checks if c)
 
 
 REGIONS = [
@@ -478,13 +528,5 @@ REGIONS = [
     },
 ]
 
-# Reflective prompt for Suara Nusantara + seeded approved entries (for a lively wall).
-VOICE_PROMPT = "Indonesia seperti apa yang ingin kamu lihat di masa depan?"
-
-SEED_WALL = [
-    "Indonesia yang bangga pada bahasa daerahnya, bukan malu memakainya.",
-    "Aku ingin Indonesia yang menjaga hutan dan lautnya sebaik menjaga sejarahnya.",
-    "Indonesia di mana anak-anak dari Sabang sampai Merauke saling mengenal cerita satu sama lain.",
-    "Semoga budaya kita terus hidup, bukan hanya jadi pajangan di museum.",
-    "Indonesia yang ramah pada perbedaan, karena beragam itu kekuatan kita.",
-]
+# Normalized content contract applied per region when served.
+REGION_BY_SLUG = {r["slug"]: r for r in REGIONS}
