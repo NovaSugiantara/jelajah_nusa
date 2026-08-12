@@ -10,7 +10,9 @@ It must show that a user can understand the journey, finish a story, receive a c
 
 ## Success Gate
 
-After the internal demo is stable, eight mixed-age participants from the 13-24 target range each attempt one story without help. Stage 2A may begin when at least five reach the collectible.
+After the internal demo is stable, eight mixed-age participants from the 13-24 target range each attempt one story on their own phone. Four receive Aceh and four receive Bali. Every participant starts at the landing page. Facilitators may observe and resolve a recorded technical failure, but may not point out controls, explain the journey, or otherwise help the participant advance.
+
+Stage 2A may begin when at least five of eight participants reach the collectible, with at least two of four succeeding for each province.
 
 This is a smoke test of general comprehension. The small mixed sample must not be used to claim fit for a specific age segment or persona.
 
@@ -68,9 +70,11 @@ Each available province has one of three statuses:
 
 No province requires another province to be completed first.
 
+Completion and the active run are separate state. A completed province with a replay in progress remains visually `completed` and adds the secondary label `Cerita ulang berlangsung` with an action to continue the replay.
+
 ## Story Experience
 
-Each province has one story designed for a 2-5 minute session. The runner displays one node per screen with short text, an optional reviewed visual, visible navigation, and a stage indicator.
+Each province has one story designed for a 2-5 minute session. The runner displays one node per screen with short text, an optional reviewed visual, visible navigation, and a stage indicator. Story screens include a `Kembali` action. The active run stores node history so a user can reread earlier nodes.
 
 The stage indicator uses words rather than percentages:
 
@@ -80,30 +84,32 @@ The stage indicator uses words rather than percentages:
 
 Each Stage 1 story contains exactly one choice point with exactly two choices. Each choice leads to a distinct branch and a distinct Discovery. There are no wrong choices, blocked endings, or branch-specific collectibles.
 
+After a choice is selected, it is locked for that run. Going back may revisit earlier text but may not change the selected branch. When history returns to the choice node, the selected option is shown as locked and `Lanjutkan pilihan` follows its saved edge. A user changes the choice only by starting an unfinished story again or replaying a completed story.
+
 ## Resume, Reset, And Replay
 
-Opening a story changes its province from `not_started` to `in_progress` and stores the current node.
+Opening a story creates an active run and derives the province status `in_progress`. A province with no progress entry is `not_started`; `not_started` is not persisted as a second representation.
 
 When an unfinished story is opened again, the province intro offers:
 
 - `Lanjutkan cerita`
 - `Mulai dari awal`
 
-Starting again clears the current node and latest choice for that province only. It does not change the other province.
+Starting again resets the active run for that province only. It does not change completion data, any Discovery already seen, or the other province.
 
 Completed stories can be replayed to see the other Discovery. Replay follows these rules:
 
-- Province status remains `completed`.
-- Replay sets `currentNodeId` to the story's `startNodeId` but does not reset completion.
+- Completion remains recorded.
+- Replay creates a new active run at the story's `startNodeId`.
 - The collectible is not duplicated.
-- The latest choice may replace the saved latest choice.
+- The replay run stores its own latest choice.
 - Every Discovery reached is retained in `seenDiscoveryIds`.
 
-For an unfinished story, `Mulai dari awal` keeps the status `in_progress`, returns `currentNodeId` to `startNodeId`, and clears `latestChoiceId`. For a completed story, the equivalent action is replay and follows the rules above.
+For an unfinished story, `Mulai dari awal` replaces the active run with a fresh run at `startNodeId`. For a completed story, the equivalent action is replay and follows the rules above.
 
 ## Completion And Collectible
 
-A story becomes complete when its Discovery is rendered. The Progress Store saves the completed status, Discovery, and province collectible before the collectible animation starts. Refreshing during or after that animation cannot lose or duplicate the reward.
+A story becomes complete during the validated state transition into its Discovery node. Story Runner validates the selected graph edge, then the Progress Store atomically saves completion, `lastDiscoveryId`, the seen Discovery, and province collectible and clears the finished active run before the UI renders Discovery or starts the collectible animation. Rendering a component never causes the completion mutation. Refreshing on the Discovery restores `lastDiscoveryId` without replaying the reward animation; refreshing during or after the transition cannot lose or duplicate the reward.
 
 Each province has exactly one collectible. Both choices award the same collectible.
 
@@ -130,7 +136,7 @@ type ProvinceContent = {
   island: string
   mapPathId: string
   intro: string
-  thumbnail: string
+  thumbnail: ReviewedAsset
   story: Story
   discoveries: [Discovery, Discovery]
   collectible: Collectible
@@ -139,32 +145,47 @@ type ProvinceContent = {
 type Story = {
   title: string
   category: 'sejarah' | 'budaya' | 'tokoh' | 'kuliner' | 'bahasa'
-  estimatedMinutes: string
+  estimatedMinutes: [2, 5]
   startNodeId: string
   nodes: StoryNode[]
 }
 
-type StoryNode = {
+type StoryNode = StoryTextNode | StoryChoiceNode | StoryDiscoveryNode
+
+type StoryTextNode = {
   id: string
-  stage: 'story' | 'choice' | 'discovery'
+  stage: 'story'
   text: string
   image?: ReviewedAsset
-  nextNodeId?: string
-  choices?: [StoryChoice, StoryChoice]
-  discoveryId?: string
+  nextNodeId: string
+}
+
+type StoryChoiceNode = {
+  id: string
+  stage: 'choice'
+  text: string
+  image?: ReviewedAsset
+  choices: [StoryChoice, StoryChoice]
+}
+
+type StoryDiscoveryNode = {
+  id: string
+  stage: 'discovery'
+  text: string
+  discoveryId: string
 }
 
 type StoryChoice = {
+  id: string
   label: string
   nextNodeId: string
-  discoveryId: string
 }
 
 type Discovery = {
   id: string
   title: string
   body: string
-  sources: Source[]
+  sources: [Source, ...Source[]]
   review: ContentReview
 }
 
@@ -173,11 +194,13 @@ type Source = {
   url: string
 }
 
-type ContentReview = {
-  status: 'draft' | 'approved'
-  reviewerRole: string
-  reviewedAt?: string
-}
+type ContentReview =
+  | { status: 'draft' }
+  | {
+      status: 'approved'
+      reviewedAt: string
+      reviewRecordId: string
+    }
 
 type ReviewedAsset = {
   src: string
@@ -194,7 +217,9 @@ type Collectible = {
 }
 ```
 
-Aceh and Bali content included during implementation is sample content until every Discovery source is visible and a relevant expert or local reviewer marks the content and cultural visual assets `approved`. Draft content must not be represented as publication-ready.
+Aceh and Bali content included during implementation is sample content until every Discovery source is visible and a relevant expert or local reviewer marks the content and cultural visual assets `approved`. An approved item requires `reviewedAt` and `reviewRecordId`; a draft item must omit both. Draft content must not be represented as publication-ready.
+
+Each `reviewRecordId` refers to a record that is not shipped in the public application bundle. It contains no reviewer PII and captures an internal reviewer ID, the reviewer's relevant capacity, the reviewed content or asset IDs, and the decision date. Public application data does not expose reviewer identity without separate consent.
 
 ### Nonfinal Story Graph Examples
 
@@ -227,32 +252,48 @@ type LocalProgress = {
 }
 
 type ProvinceProgress = {
-  status: 'not_started' | 'in_progress' | 'completed'
-  currentNodeId: string
-  latestChoiceId?: string
+  activeRun?: ActiveRun
+  completedAt?: string
+  lastDiscoveryId?: string
   seenDiscoveryIds: string[]
   collectibleOwned: boolean
   updatedAt: string
 }
+
+type ActiveRun = {
+  currentNodeId: string
+  nodeHistory: string[]
+  latestChoiceId?: string
+}
 ```
 
-The persisted value is untrusted input. The Progress Store validates the schema version, province keys, status, and referenced content IDs before exposing state to the UI. It ignores an invalid province entry when the other entry remains valid. If the whole value is unreadable, the app starts with empty progress.
+No province entry means `not_started`. An entry with an active run and no `completedAt` is `in_progress`. An entry with `completedAt` is `completed`, whether or not a replay run is active.
+
+A valid province entry satisfies these invariants:
+
+- It has an `activeRun`, a `completedAt`, or both; an empty entry is invalid.
+- `collectibleOwned` is `true` if and only if `completedAt` exists.
+- A completed entry has a valid `lastDiscoveryId`, and that ID appears in `seenDiscoveryIds`.
+- `currentNodeId`, every `nodeHistory` item, `latestChoiceId`, and every seen Discovery refer to the same province's current content graph.
+- Finishing either an initial run or replay clears `activeRun`; a later replay creates a new one.
+
+The persisted value is untrusted input. The Progress Store validates schema version 1, province keys, timestamps, booleans, and all referenced content IDs before exposing state to the UI. Within version 1, it ignores an invalid province entry when the other entry remains valid and shows one notice: `Sebagian progres tidak dapat dipulihkan.` If the whole value is unreadable, the app starts with empty progress. An unknown schema version is ignored as empty progress; cross-version salvage is forbidden until an explicit migration exists.
 
 ## Storage Failure
 
-If browser storage is unavailable, full, or throws an error, the Progress Store falls back to memory for the current page session. The journey remains usable and displays:
+If browser storage is unavailable, full, or throws an error, the Progress Store copies the last valid state into memory, applies the pending mutation there, and uses memory for the rest of the current application runtime. Client-side navigation retains progress, but reload or closing the tab may erase it. The journey remains usable and displays:
 
-`Progres hanya tersimpan selama halaman ini terbuka.`
+`Progres sementara tersimpan sampai halaman dimuat ulang atau ditutup.`
 
 Storage failure must not block a story, choice, Discovery, or collectible.
 
 ## Error Handling
 
 - An invalid province slug shows a not-found state and `Kembali ke peta`.
-- A story with a missing node or invalid target stops safely, explains that the story cannot continue, and offers `Mulai dari awal`.
+- A story with a missing node or invalid target stops safely with `Cerita ini belum bisa dilanjutkan.` and always offers `Kembali ke peta`. It offers `Mulai dari awal` only when the start node and initial path validate successfully.
 - A failed image leaves the text, controls, and story completion path usable.
 - A failed external source does not reverse completion or remove a collectible.
-- Progress parsing and migration errors never render a blank page.
+- Progress parsing and recovery errors never render a blank page.
 
 ## Accessibility And Responsive Behavior
 
@@ -286,15 +327,23 @@ Story content retains visual priority over collection mechanics.
 - Node IDs are unique and every next-node reference exists.
 - Both branches terminate at a sourced Discovery.
 - Each Discovery and cultural asset exposes review metadata.
+- Every source collection contains at least one valid external URL.
+- Approved content and assets reference a complete internal review record.
+- Province thumbnails use the same reviewed-asset contract as story and collectible images.
 
 ### Progress Tests
 
-- Opening a story moves `not_started` to `in_progress`.
+- Opening a story creates an active run and derives `in_progress`.
 - Refresh resumes at the stored node.
+- Back navigation follows `nodeHistory` without unlocking a selected choice.
 - Reset affects only the selected province.
-- Rendering Discovery atomically records completion and collectible ownership.
+- A validated transition into Discovery atomically records completion and collectible ownership before render.
+- Completion clears the finished active run; replay creates a new run and clears it at the next Discovery.
+- Refresh on Discovery restores `lastDiscoveryId` without replaying the collectible animation.
 - Replay records another Discovery without duplicating the collectible.
+- A completed province with an active replay remains completed and exposes replay state separately.
 - Invalid persisted data produces valid empty or partially recovered state.
+- An unknown schema version produces empty progress rather than cross-version salvage.
 - Storage failure switches to memory without blocking the journey.
 
 ### Component Tests
@@ -306,12 +355,24 @@ Story content retains visual priority over collection mechanics.
 
 ### End-To-End Tests
 
-- Complete Aceh through each branch and retain both Discoveries.
+- Complete each Aceh branch independently from clean progress.
+- Complete each Bali branch independently from clean progress.
+- Complete one branch, replay, and retain both Discoveries without duplicating the collectible.
 - Refresh midway through a story and continue from the saved node.
 - Replay a completed province without duplicating its collectible.
 - Confirm Aceh reset or replay does not modify Bali progress.
 - Complete the journey using keyboard controls at 360px width.
 - Confirm reduced-motion mode does not hide completion feedback.
+
+### Facilitated Gate Protocol
+
+- Recruit eight participants aged 13-24 and record age, phone model, browser, assigned province, completion outcome, technical failures, and any facilitator intervention.
+- Assign four participants to Aceh and four to Bali before each session.
+- Start every participant at `/` on their own phone with empty local progress.
+- Give only the neutral task: `Pilih provinsi yang diberikan dan selesaikan perjalanannya.`
+- Do not point out controls, explain choices, or tell the participant what to press.
+- Count success only when the participant reaches the collectible without guidance. Record technical assistance separately and do not count an assisted run as unassisted success.
+- Pass the gate only when total success is at least 5/8 and each province reaches at least 2/4.
 
 ## Out Of Scope
 
