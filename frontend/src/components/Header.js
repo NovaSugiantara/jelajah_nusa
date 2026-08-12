@@ -1,12 +1,31 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Map, BookMarked, MessagesSquare, Compass } from "lucide-react";
+import { Map, BookMarked, MessagesSquare, Compass, Volume2, VolumeX } from "lucide-react";
+import audioEngine from "../lib/audio";
 
 const links = [
   { to: "/", label: "Peta", icon: Map, testid: "nav-peta" },
   { to: "/passport", label: "Nusa Passport", icon: BookMarked, testid: "nav-passport" },
   { to: "/suara", label: "Suara Nusantara", icon: MessagesSquare, testid: "nav-suara" },
 ];
+
+function SoundToggle() {
+  const [on, setOn] = useState(audioEngine.isEnabled());
+  useEffect(() => audioEngine.subscribe(setOn), []);
+  return (
+    <button
+      onClick={() => audioEngine.setEnabled(!on)}
+      data-testid="sound-toggle"
+      aria-label={on ? "Matikan Suara Nusantara" : "Nyalakan Suara Nusantara"}
+      title={on ? "Suara aktif" : "Suara mati"}
+      className={`flex h-9 w-9 items-center justify-center rounded-full transition-soft ${
+        on ? "bg-merah text-white" : "text-tinta/70 hover:bg-kertas2"
+      }`}
+    >
+      {on ? <Volume2 size={17} /> : <VolumeX size={17} />}
+    </button>
+  );
+}
 
 export default function Header() {
   const loc = useLocation();
@@ -51,6 +70,7 @@ export default function Header() {
               </Link>
             );
           })}
+          <SoundToggle />
         </nav>
       </div>
     </header>

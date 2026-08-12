@@ -1,8 +1,12 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { X } from "lucide-react";
 import CollectibleIcon from "./CollectibleIcon";
+import audioEngine from "../lib/audio";
 
 export default function CollectibleReveal({ collectible, regionName, accent, onClose, onPassport }) {
+  useEffect(() => {
+    audioEngine.chime();
+  }, []);
   if (!collectible) return null;
   return (
     <div

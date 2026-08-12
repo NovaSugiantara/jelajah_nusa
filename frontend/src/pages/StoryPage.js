@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { fetchRegion } from "../lib/api";
 import { useApp } from "../context/AppContext";
+import audioEngine from "../lib/audio";
 import CollectibleReveal from "../components/CollectibleReveal";
 import { ArrowLeft, ArrowRight, BookOpen, Quote, ExternalLink, Sparkles, Map } from "lucide-react";
 
@@ -25,8 +26,10 @@ export default function StoryPage() {
       setRegion(r);
       setNodeId(r.story.start);
     });
+    audioEngine.start(slug);
     return () => {
       alive = false;
+      audioEngine.stop();
     };
   }, [slug]);
 

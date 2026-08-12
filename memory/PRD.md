@@ -15,7 +15,8 @@ Core loop: Explore → Story → Choose → Discover → Collect → Continue.
 
 ## Implemented (12 Aug 2026)
 - 8 provinsi: Aceh, Sumatera Barat, DKI Jakarta, Yogyakarta, Bali, Kalimantan Barat, Sulawesi Selatan, Papua.
-- Interactive map (SVG archipelago + status pins), region cards.
+- Interactive map: REAL Indonesia GeoJSON (src/data/indonesia.json) via custom equirectangular projection in RegionMap.js; province outlines + 8 clickable target + status pins di centroid. Region cards.
+- Audio Nusantara: procedural Web Audio ambient (src/lib/audio.js), profil musik berbeda per wilayah; toggle global Header (default off), mulai di story page, chime saat dapat collectible. Persist localStorage jn_sound_enabled.
 - Story engine: scene → 1 decision (2 choices) → 2 sourced discoveries per region; collectible awarded regardless of choice (no duplicates).
 - Progress tracking + explorer levels (0 Musafir Baru, 1 Penjelajah Muda, 2 Penjelajah, 4 Ahli, 6 Penjaga Cerita, 8 Duta Nusantara); milestones 2/4/6/8.
 - Nusa Passport: stempel wilayah, koleksi, cerita ditemukan, level + milestones.
