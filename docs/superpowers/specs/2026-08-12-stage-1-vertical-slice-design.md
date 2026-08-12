@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Stage 1 is an internal, backend-free demonstration of the full Jelajah Nusa loop for Aceh and Bali:
+Stage 1 is an internal FARM-stack demonstration of the full Jelajah Nusa loop for Aceh and Bali:
 
 `Explore -> Story -> Choose -> Discover -> Collect -> Continue`
 
-It must show that a user can understand the journey, finish a story, receive a collectible, and see the result in Nusa Passport. It does not validate aggregate product KPIs and does not include Supabase, Explorer Card, Suara Nusantara, level progression, or AI.
+It must show that a user can understand the journey, finish a story, receive a collectible, and see the result in Nusa Passport. It uses React, FastAPI, and MongoDB Atlas from the start. It does not validate aggregate product KPIs and does not include Explorer Card, Suara Nusantara, level progression, or AI.
 
 ## Success Gate
 
@@ -18,15 +18,24 @@ This is a smoke test of general comprehension. The small mixed sample must not b
 
 ## Architecture
 
-Stage 1 is a client-only vertical slice with five modules:
+Stage 1 is a FARM vertical slice with six modules:
 
 1. **Landing** presents the editorial cover and routes to the map.
 2. **Explore Map** presents Aceh and Bali as the only interactive provinces.
-3. **Story Runner** renders structured story data and controls story transitions.
-4. **Progress Store** owns all progress reads and writes, using browser storage with an in-memory fallback.
-5. **Nusa Passport** renders progress and collectibles from the Progress Store.
+3. **Story Runner** renders structured story data from FastAPI and requests validated story transitions.
+4. **FastAPI** owns content delivery, anonymous sessions, graph validation, and progress transitions.
+5. **MongoDB Atlas** stores content, hashed sessions, and progress.
+6. **Nusa Passport** renders progress returned by FastAPI.
 
-UI components do not read or write browser storage directly. Story and collectible content is structured data, not component markup. Story URLs work when opened directly; the landing page is the normal entrance, not a navigation guard.
+React components do not mutate progress directly. They send transition intent to FastAPI and update the screen only after the API returns the committed progress. Story and collectible content is structured data in MongoDB, not component markup. Story URLs work when opened directly; the landing page is the normal entrance, not a navigation guard.
+
+## Anonymous Session
+
+FastAPI creates an anonymous session on the first request that needs identity. The browser receives an opaque random token in a cookie configured `HttpOnly`, `Secure`, `SameSite=Lax`, and `Path=/`. MongoDB stores only a hash of the token with `createdAt`, `lastSeenAt`, and `expiresAt`. React and FastAPI are deployed same-origin when possible; FastAPI rejects unapproved origins on state-changing requests.
+
+The session expires after 30 days without activity. Valid activity refreshes `lastSeenAt` and `expiresAt`. FastAPI derives identity from the cookie on every progress request and never trusts a user or session ID supplied in the JSON body, query string, or route.
+
+MongoDB enforces unique indexes on `sessions.tokenHash` and `progress.sessionId`, plus TTL indexes on both collections' `expiresAt`. FastAPI refreshes both expiry values on valid session activity. Expired documents may be deleted asynchronously by MongoDB; FastAPI still rejects any session whose `expiresAt` is in the past.
 
 ## Routes And Navigation
 
@@ -88,7 +97,7 @@ After a choice is selected, it is locked for that run. Going back may revisit ea
 
 ## Resume, Reset, And Replay
 
-Opening a story creates an active run and derives the province status `in_progress`. A province with no progress entry is `not_started`; `not_started` is not persisted as a second representation.
+Opening a story requests FastAPI to create an active run and derives the province status `in_progress`. A province with no progress entry is `not_started`; `not_started` is not persisted as a second representation.
 
 When an unfinished story is opened again, the province intro offers:
 
@@ -109,7 +118,7 @@ For an unfinished story, `Mulai dari awal` replaces the active run with a fresh 
 
 ## Completion And Collectible
 
-A story becomes complete during the validated state transition into its Discovery node. Story Runner validates the selected graph edge, then the Progress Store atomically saves completion, `lastDiscoveryId`, the seen Discovery, and province collectible and clears the finished active run before the UI renders Discovery or starts the collectible animation. Rendering a component never causes the completion mutation. Refreshing on the Discovery restores `lastDiscoveryId` without replaying the reward animation; refreshing during or after the transition cannot lose or duplicate the reward.
+A story becomes complete during the validated state transition into its Discovery node. FastAPI validates the current session, active run, selected graph edge, and target node, then atomically saves completion, `lastDiscoveryId`, the seen Discovery, and province collectible and clears the finished active run before React renders Discovery or starts the collectible animation. Rendering a component never causes the completion mutation. Refreshing on the Discovery restores `lastDiscoveryId` without replaying the reward animation; retrying the transition cannot lose or duplicate the reward.
 
 Each province has exactly one collectible. Both choices award the same collectible.
 
@@ -243,12 +252,14 @@ The final labels, narrative text, facts, sources, imagery, and collectible detai
 
 ## Progress Contract
 
-Local progress has a schema version and independent state per province:
+MongoDB progress has a schema version, belongs to the server-derived session identity, and stores independent state per province:
 
 ```ts
-type LocalProgress = {
+type UserProgress = {
   version: 1
+  sessionId: string
   provinces: Partial<Record<'aceh' | 'bali', ProvinceProgress>>
+  expiresAt: string
 }
 
 type ProvinceProgress = {
@@ -277,15 +288,28 @@ A valid province entry satisfies these invariants:
 - `currentNodeId`, every `nodeHistory` item, `latestChoiceId`, and every seen Discovery refer to the same province's current content graph.
 - Finishing either an initial run or replay clears `activeRun`; a later replay creates a new one.
 
-The persisted value is untrusted input. The Progress Store validates schema version 1, province keys, timestamps, booleans, and all referenced content IDs before exposing state to the UI. Within version 1, it ignores an invalid province entry when the other entry remains valid and shows one notice: `Sebagian progres tidak dapat dipulihkan.` If the whole value is unreadable, the app starts with empty progress. An unknown schema version is ignored as empty progress; cross-version salvage is forbidden until an explicit migration exists.
+FastAPI validates schema version 1, province keys, timestamps, booleans, and all referenced content IDs before returning progress. Within version 1, it ignores an invalid province entry when the other entry remains valid and returns a recovery notice: `Sebagian progres tidak dapat dipulihkan.` An unknown schema version returns empty progress for the session; cross-version salvage is forbidden until an explicit migration exists.
 
-## Storage Failure
+Stage 1 uses three collections: `content`, `sessions`, and `progress`. Each province is one `content` document with its story graph, Discoveries, review metadata, and collectible embedded. Each session has at most one `progress` document, so completion, Discovery, collectible, and active-run changes use one atomic document update. Progress expires with its anonymous session.
 
-If browser storage is unavailable, full, or throws an error, the Progress Store copies the last valid state into memory, applies the pending mutation there, and uses memory for the rest of the current application runtime. Client-side navigation retains progress, but reload or closing the tab may erase it. The journey remains usable and displays:
+## API Contract
 
-`Progres sementara tersimpan sampai halaman dimuat ulang atau ditutup.`
+The Stage 1 API needs only these capabilities:
 
-Storage failure must not block a story, choice, Discovery, or collectible.
+- Fetch Aceh/Bali content allowed in the current environment. Production serves only `approved` content; the internal demo may serve visibly marked drafts.
+- Fetch progress for the current anonymous session.
+- Start or reset a province run.
+- Move backward through saved history.
+- Submit a forward transition or choice against the current run.
+- Start a replay for a completed province.
+
+Every mutation returns the committed progress and current node. Mutation requests include the expected current node so FastAPI can reject stale or repeated transitions safely. Completion and collectible writes are idempotent.
+
+## API Failure
+
+React keeps the current node visible and disables duplicate submission while a progress mutation is pending. It moves to the next node only after FastAPI confirms the write. On timeout, network error, or server rejection, it shows `Progres belum tersimpan. Coba lagi.` with `Coba lagi` and does not advance locally.
+
+Stage 1 has no offline queue, optimistic transition, browser progress mirror, or local fallback. A content API failure shows a retry state and does not render a partial story graph.
 
 ## Error Handling
 
@@ -293,7 +317,7 @@ Storage failure must not block a story, choice, Discovery, or collectible.
 - A story with a missing node or invalid target stops safely with `Cerita ini belum bisa dilanjutkan.` and always offers `Kembali ke peta`. It offers `Mulai dari awal` only when the start node and initial path validate successfully.
 - A failed image leaves the text, controls, and story completion path usable.
 - A failed external source does not reverse completion or remove a collectible.
-- Progress parsing and recovery errors never render a blank page.
+- Progress or API recovery errors never render a blank page.
 
 ## Accessibility And Responsive Behavior
 
@@ -333,7 +357,7 @@ Story content retains visual priority over collection mechanics.
 
 ### Progress Tests
 
-- Opening a story creates an active run and derives `in_progress`.
+- Opening a story through FastAPI creates an active run scoped to the anonymous session and derives `in_progress`.
 - Refresh resumes at the stored node.
 - Back navigation follows `nodeHistory` without unlocking a selected choice.
 - Reset affects only the selected province.
@@ -342,15 +366,26 @@ Story content retains visual priority over collection mechanics.
 - Refresh on Discovery restores `lastDiscoveryId` without replaying the collectible animation.
 - Replay records another Discovery without duplicating the collectible.
 - A completed province with an active replay remains completed and exposes replay state separately.
-- Invalid persisted data produces valid empty or partially recovered state.
+- Invalid MongoDB progress produces valid empty or partially recovered state.
 - An unknown schema version produces empty progress rather than cross-version salvage.
-- Storage failure switches to memory without blocking the journey.
+- A failed mutation leaves React on the current node and retry commits exactly once.
+- A client-supplied session or user ID cannot access another session's progress.
+- Expired sessions and requests from unapproved origins cannot mutate progress.
+
+### API And Database Tests
+
+- A first progress request creates one anonymous session cookie and stores only its token hash.
+- Reusing the cookie returns the same session progress; omitting it creates a different session.
+- Session and progress expiry move together after valid activity, and expired sessions are rejected even before TTL cleanup runs.
+- Content responses exclude draft records in production and include visibly marked drafts only in the internal-demo environment.
+- Concurrent or repeated completion requests produce one completion and one collectible.
+- Content, progress, and error responses satisfy the documented JSON contract.
 
 ### Component Tests
 
 - Map and visible list navigate to the same province route.
 - Story Runner renders the correct stage and two choices.
-- Passport reflects progress from the Progress Store.
+- Passport reflects progress returned by FastAPI.
 - Unknown slugs and invalid story graphs show recovery actions.
 
 ### End-To-End Tests
@@ -368,7 +403,7 @@ Story content retains visual priority over collection mechanics.
 
 - Recruit eight participants aged 13-24 and record age, phone model, browser, assigned province, completion outcome, technical failures, and any facilitator intervention.
 - Assign four participants to Aceh and four to Bali before each session.
-- Start every participant at `/` on their own phone with empty local progress.
+- Start every participant at `/` on their own phone with a fresh anonymous session and empty server progress.
 - Give only the neutral task: `Pilih provinsi yang diberikan dan selesaikan perjalanannya.`
 - Do not point out controls, explain choices, or tell the participant what to press.
 - Count success only when the participant reaches the collectible without guidance. Record technical assistance separately and do not count an assisted run as unassisted success.
@@ -376,7 +411,7 @@ Story content retains visual priority over collection mechanics.
 
 ## Out Of Scope
 
-- Supabase and anonymous authentication
+- Registered user accounts or social login
 - Cross-device progress
 - Explorer levels
 - Explorer Card and Web Share
@@ -386,3 +421,4 @@ Story content retains visual priority over collection mechanics.
 - CMS or admin interfaces
 - Aggregate analytics or KPI claims
 - Final publication of unreviewed cultural content
+- Offline mode or local progress fallback

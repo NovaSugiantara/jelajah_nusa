@@ -67,8 +67,8 @@ Lihat detail lengkap di [DESIGN.md](./docs/DESIGN.md).
 
 ## Tahapan MVP
 
-- Tahap 1: demo internal Aceh dan Bali dengan progress lokal
-- Tahap 2A: 8 provinsi, Supabase anonymous progress, Nusa Passport penuh, dan Explorer Card
+- Tahap 1: demo internal Aceh dan Bali dengan React, FastAPI, dan MongoDB Atlas
+- Tahap 2A: 8 provinsi, Nusa Passport penuh, dan Explorer Card
 - Tahap 2B: Suara Nusantara dengan moderasi sebelum publikasi
 
 ## Value Utama

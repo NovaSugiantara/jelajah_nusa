@@ -3,8 +3,8 @@
 
 | | |
 |---|---|
-| **Versi** | 1.1 — Draft |
-| **Tanggal** | 12 Agustus 2026 |
+| **Versi** | 1.2 — Draft |
+| **Tanggal** | 13 Agustus 2026 |
 | **Status** | Draft untuk direview |
 | **Dokumen terkait** | `docs/SRS.md`, `docs/DESIGN.md`, `AGENTS.md` |
 
@@ -74,9 +74,9 @@ Jelajah Nusa adalah aplikasi edukasi interaktif berbasis web yang mengajak pengg
 
 | Tahap | Tujuan | Cakupan |
 |---|---|---|
-| **Tahap 1 — Demo internal** | Membuktikan alur dapat didemonstrasikan utuh | 2 provinsi (Aceh dan Bali), story, choice, discovery, collectible, progress lokal, dan Passport ringan. Tidak ada backend, Explorer Card, atau wall komunitas |
+| **Tahap 1 — Demo internal** | Membuktikan alur dapat didemonstrasikan utuh | 2 provinsi (Aceh dan Bali), story, choice, discovery, collectible, progress anonymous melalui FARM, dan Passport ringan. Tidak ada Explorer Card atau wall komunitas |
 | **Gate user test** | Smoke test keterpahaman umum sebelum ekspansi | 8 pengguna usia 13–24 pada ponsel masing-masing; 4 menguji Aceh dan 4 Bali. Minimal 5/8 mencapai collectible tanpa arahan, dengan minimal 2/4 berhasil pada tiap provinsi. Sampel campuran ini tidak digunakan untuk menyimpulkan kecocokan persona tertentu |
-| **Tahap 2A — Produk inti** | Melengkapi pengalaman eksplorasi | 8 provinsi, Supabase anonymous progress, Passport penuh, milestone explorer 2/4/6/8, dan Explorer Card |
+| **Tahap 2A — Produk inti** | Melengkapi pengalaman eksplorasi | 8 provinsi, Passport penuh, milestone explorer 2/4/6/8, dan Explorer Card |
 | **Tahap 2B — Komunitas** | Menambahkan refleksi publik dengan aman | Suara Nusantara anonim, pre-moderation, dan moderation queue internal yang dilindungi email magic link |
 
 Tahap 1 adalah demo internal, bukan validasi KPI agregat. Target completion diukur setelah tersedia pengumpulan data yang sesuai.
@@ -101,7 +101,7 @@ Semua provinsi yang tersedia dapat dipilih sejak awal. Status peta hanya **belum
 ### 7.4 Di Luar Ruang Lingkup MVP
 
 - Seluruh 38 provinsi (baru 8 provinsi untuk MVP, prioritaskan kualitas dulu)
-- Login sosial penuh / sistem akun pengguna kompleks (Tahap 1 memakai penyimpanan lokal; Tahap 2A memakai anonymous auth)
+- Login sosial penuh / sistem akun pengguna kompleks (anonymous session dibuat FastAPI tanpa registrasi)
 - AI sebagai fitur inti (tetap opsional, bukan blocker)
 - Integrasi kurikulum sekolah formal / dashboard guru
 - Mode multiplayer/kolaboratif
@@ -154,16 +154,16 @@ KPI agregat tidak berlaku untuk demo internal Tahap 1. Gate Tahap 1 hanya smoke 
 
 - Platform awal adalah **web app** (bukan native mobile), dioptimalkan mobile-first.
 - Bahasa utama aplikasi adalah **Bahasa Indonesia**.
-- Progress tracking tidak mewajibkan pendaftaran akun penuh: Tahap 1 memakai penyimpanan lokal dan Tahap 2A memakai anonymous auth.
+- Progress tracking tidak mewajibkan pendaftaran akun penuh: FastAPI membuat anonymous session dengan masa aktif 30 hari sejak aktivitas terakhir.
 - Aset visual (ilustrasi, ikon peta) dianggap sebagai kebutuhan produksi terpisah, tidak dibahas detail di PRD ini.
 
 ## 13. Roadmap Rilis (Tentatif)
 
 | Fase | Fokus |
 |---|---|
-| Tahap 1 | Demo internal core loop untuk Aceh dan Bali, progress lokal, dan Passport ringan |
+| Tahap 1 | Demo internal core loop untuk Aceh dan Bali dengan FARM, anonymous progress, dan Passport ringan |
 | Gate | User test 8 peserta campuran usia 13–24 pada ponsel masing-masing; 4 Aceh dan 4 Bali; minimal 5/8 selesai tanpa arahan dan minimal 2/4 berhasil per provinsi |
-| Tahap 2A | Lengkapi 8 provinsi, Supabase anonymous progress, Passport penuh, dan Explorer Card |
+| Tahap 2A | Lengkapi 8 provinsi, Passport penuh, dan Explorer Card |
 | Tahap 2B | Suara Nusantara anonim dengan pre-moderation dan moderation queue terbatas |
 | Potensi lanjutan | Perluasan provinsi, integrasi pendidikan sekolah, dan AI personalisasi |
 

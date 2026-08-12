@@ -3,8 +3,8 @@
 
 | | |
 |---|---|
-| **Versi** | 1.1 — Draft |
-| **Tanggal** | 12 Agustus 2026 |
+| **Versi** | 1.2 — Draft |
+| **Tanggal** | 13 Agustus 2026 |
 | **Status** | Draft untuk direview |
 | **Dokumen terkait** | `docs/PRD.md`, `docs/DESIGN.md`, `AGENTS.md` |
 
@@ -24,9 +24,9 @@ SRS ini mencakup seluruh fitur MVP: peta interaktif, story engine, choice-based 
 |---|---|
 | FR | Functional Requirement |
 | NFR | Non-Functional Requirement |
-| RLS | Row Level Security (Supabase/Postgres) |
+| FARM | FastAPI, React, MongoDB |
 | Story Node | Satu unit teks cerita dalam sebuah alur bercabang |
-| Session User | Pengguna yang diidentifikasi lewat sesi/anonymous auth, tanpa akun penuh |
+| Session User | Pengguna yang diidentifikasi FastAPI lewat opaque session cookie, tanpa akun penuh |
 
 ### 1.4 Referensi
 - `docs/PRD.md`
@@ -35,7 +35,7 @@ SRS ini mencakup seluruh fitur MVP: peta interaktif, story engine, choice-based 
 ## 2. Deskripsi Umum
 
 ### 2.1 Perspektif Produk
-Jelajah Nusa adalah aplikasi web mandiri (bukan bagian dari sistem lain) dengan frontend Nuxt 4. Tahap 1 tidak memakai backend; Supabase mulai digunakan pada Tahap 2A. AI tetap opsional dan tidak boleh menjadi ketergantungan core loop.
+Jelajah Nusa adalah aplikasi web mandiri (bukan bagian dari sistem lain) dengan stack FARM: frontend React, API FastAPI, dan MongoDB Atlas. Stack penuh digunakan sejak Tahap 1. AI tetap opsional dan tidak boleh menjadi ketergantungan core loop.
 
 ### 2.2 Fungsi Utama Produk
 1. Menampilkan peta interaktif 8 provinsi Indonesia.
@@ -52,10 +52,10 @@ Pengguna umum (pelajar, pendidik, wisatawan) tanpa keahlian teknis, mengakses le
 
 | Tahap | Cakupan teknis |
 |---|---|
-| **Tahap 1 — Demo internal** | Aceh dan Bali; data konten terstruktur; progress dan Passport ringan di penyimpanan lokal; tanpa Supabase, Explorer Card, atau Suara Nusantara publik |
+| **Tahap 1 — Demo internal** | Aceh dan Bali; React mengonsumsi API konten/progress FastAPI; MongoDB Atlas menyimpan konten, session, dan progress; tanpa Explorer Card atau Suara Nusantara publik |
 | **Gate user test** | 8 peserta campuran usia 13–24 pada ponsel masing-masing; 4 menguji Aceh dan 4 Bali. Minimal 5/8 mencapai collectible tanpa arahan, dengan minimal 2/4 berhasil per provinsi. Hasil hanya smoke test keterpahaman umum |
-| **Tahap 2A — Produk inti** | 8 provinsi; anonymous auth dan progress Supabase; Passport penuh; Explorer Card melalui Web Share API dengan fallback unduh gambar |
-| **Tahap 2B — Komunitas** | Submission Suara Nusantara anonim dan pending secara default; moderation queue terbatas dengan akses moderator melalui email magic link |
+| **Tahap 2A — Produk inti** | 8 provinsi; Passport penuh; Explorer Card melalui Web Share API dengan fallback unduh gambar |
+| **Tahap 2B — Komunitas** | Submission Suara Nusantara anonim dan pending secara default; moderation queue terbatas dengan akses moderator melalui email magic link yang dikirim provider email transaksional |
 
 ### 2.5 Batasan Umum
 - MVP dibatasi pada 8 provinsi.
@@ -63,9 +63,9 @@ Pengguna umum (pelajar, pendidik, wisatawan) tanpa keahlian teknis, mengakses le
 - Tidak ada mode multiplayer.
 
 ### 2.6 Asumsi & Ketergantungan
-- Tahap 1 tidak bergantung pada backend; progress disimpan pada perangkat yang sama.
-- Mulai Tahap 2A, Supabase digunakan untuk anonymous auth dan penyimpanan progres.
-- Tahap 2B menggunakan Supabase untuk Suara Nusantara dan autentikasi moderator.
+- Tahap 1 menggunakan FastAPI dan MongoDB Atlas untuk konten, anonymous session, dan progress.
+- Anonymous session memakai opaque token dalam cookie HttpOnly, Secure, SameSite=Lax dan kedaluwarsa setelah 30 hari tanpa aktivitas; database hanya menyimpan hash token.
+- Tahap 2B menggunakan FastAPI untuk magic-link moderator dan provider email transaksional untuk pengiriman email.
 
 ## 3. Kebutuhan Fungsional
 
@@ -109,8 +109,9 @@ Prioritas: **M** = Must have, **S** = Should have, **C** = Could have.
 | FR-PROG-01 | Sistem harus menyimpan provinsi yang telah dijelajahi per pengguna/sesi | M |
 | FR-PROG-02 | Sistem harus menyimpan cerita yang telah diselesaikan dan pilihan yang diambil | M |
 | FR-PROG-03 | Sistem harus menghitung level explorer berdasarkan jumlah provinsi selesai | S |
-| FR-PROG-04 | Progres harus tetap ada saat pengguna kembali ke aplikasi pada sesi/perangkat yang sama | M |
-| FR-PROG-05 | Tahap 1 harus menyimpan progres secara lokal; Tahap 2A harus memindahkan penyimpanan progres ke identitas anonymous Supabase | M |
+| FR-PROG-04 | Progres harus tetap ada saat pengguna kembali dengan anonymous session yang masih aktif pada perangkat yang sama | M |
+| FR-PROG-05 | FastAPI harus menyimpan progres di MongoDB Atlas dan mengambil identitas hanya dari session cookie, bukan user ID dari client | M |
+| FR-PROG-06 | Frontend harus menahan transisi story sampai FastAPI mengonfirmasi penyimpanan; jika gagal, node saat ini tetap tampil dengan aksi retry | M |
 
 ### 3.5 Modul Nusa Passport (FR-PASS)
 
@@ -159,10 +160,10 @@ Prioritas: **M** = Must have, **S** = Should have, **C** = Could have.
 
 | Kategori | Kebutuhan |
 |---|---|
-| **Performa** | Waktu muat halaman awal < 3 detik pada koneksi 4G rata-rata; transisi antar story node < 300ms |
+| **Performa** | Waktu muat halaman awal < 3 detik pada koneksi 4G rata-rata; feedback pending tampil < 100ms setelah aksi dan node berikutnya tampil hanya setelah respons API |
 | **Usability** | Navigasi utama (peta → cerita → passport) dapat dipahami tanpa tutorial panjang |
 | **Reliabilitas** | Progres pengguna tidak boleh hilang akibat refresh halaman dalam sesi yang sama |
-| **Keamanan** | Mulai Tahap 2A, data progres diisolasi lewat RLS Supabase per user/session. Tahap 2B memvalidasi submission di server, menyimpannya pending, dan membatasi moderation queue pada role moderator |
+| **Keamanan** | FastAPI mengisolasi setiap query progress berdasarkan session identity dari cookie HttpOnly; client-supplied user ID tidak dipercaya. Endpoint mutasi memverifikasi origin yang diizinkan. Tahap 2B memvalidasi submission di server, menyimpannya pending, dan membatasi moderation queue pada role moderator |
 | **Skalabilitas** | Struktur data mendukung penambahan provinsi lebih dari 8 tanpa perubahan skema besar |
 | **Kompatibilitas** | Berjalan baik di browser modern (Chrome, Safari, Firefox) versi 2 tahun terakhir |
 | **Responsiveness** | Mobile-first, layout tetap fungsional dari lebar 360px ke atas |
@@ -171,18 +172,16 @@ Prioritas: **M** = Must have, **S** = Should have, **C** = Could have.
 
 ## 5. Model Data (Entitas Utama)
 
-| Entitas | Field Utama | Deskripsi |
+| Collection | Field Utama | Deskripsi |
 |---|---|---|
-| **Region** | id, name, island, slug, map_path_id, thumbnail_url, status | Data provinsi di peta |
-| **Story** | id, region_id, title, category (sejarah/budaya/tokoh/kuliner/bahasa) | Cerita per provinsi |
-| **StoryNode** | id, story_id, order, text, image_url | Unit teks dalam cerita |
-| **Choice** | id, story_node_id, label, next_node_id | Opsi pilihan pada titik keputusan |
-| **Collectible** | id, region_id, name, type, image_url, description | Item koleksi per provinsi |
-| **UserProgress** | user_id (session/anon), regions_explored[], stories_completed[], collectibles_owned[], level | Progres pengguna mulai Tahap 2A; Tahap 1 memakai struktur setara di penyimpanan lokal |
-| **PassportEntry** | user_id, region_id, collectible_id, collected_at | Catatan koleksi individual |
-| **CommunityWallEntry** | id, user_id (anon), answer_text, moderation_status, created_at, reviewed_by, reviewed_at | Entri anonim Suara Nusantara dengan status pending/approved/rejected |
+| **content** | slug, name, island, map_path_id, intro, story, discoveries[], collectible, review | Satu dokumen per provinsi; story nodes, choices, Discovery, sumber, dan collectible tertanam |
+| **sessions** | token_hash, role, created_at, last_seen_at, expires_at | Anonymous atau moderator session; raw token hanya berada di secure HttpOnly cookie |
+| **progress** | session_id, version, provinces, updated_at, expires_at | Satu dokumen per session dengan state provinsi tertanam; menjadi sumber Nusa Passport dan mengikuti retensi session |
+| **community_entries** | session_id, answer_text, moderation_status, created_at, reviewed_by, reviewed_at | Tahap 2B; identitas session tidak pernah tampil di wall publik |
+| **moderators** | email, role, active | Tahap 2B; daftar penerima magic link yang diizinkan |
+| **magic_link_tokens** | token_hash, moderator_id, expires_at, used_at | Tahap 2B; token sekali pakai dengan masa berlaku terbatas |
 
-**Relasi utama:** Region 1—N Story; Story 1—N StoryNode; StoryNode 1—N Choice; Region 1—1 Collectible; UserProgress N—N Region (lewat PassportEntry).
+`sessions.token_hash` dan `progress.session_id` harus unik. `sessions.expires_at`, `progress.expires_at`, dan `magic_link_tokens.expires_at` memakai TTL index. FastAPI menyelaraskan expiry session dan progress pada aktivitas yang valid. Completion, Discovery, collectible, dan active run diperbarui atomik dalam satu dokumen `progress`.
 
 ## 6. Kebutuhan Antarmuka
 
@@ -190,10 +189,10 @@ Prioritas: **M** = Must have, **S** = Should have, **C** = Could have.
 Web responsif, mobile-first, mengikuti sistem desain di `docs/DESIGN.md`.
 
 ### 6.2 Antarmuka Perangkat Lunak
-- Tahap 1 menggunakan penyimpanan browser untuk progress; tidak membutuhkan Supabase.
-- Tahap 2A menggunakan Supabase client (Postgres + Auth anonymous + Storage untuk aset collectible/gambar cerita).
-- RLS diterapkan pada tabel UserProgress, PassportEntry, dan CommunityWallEntry.
-- Tahap 2B menggunakan email magic link dan role moderator untuk moderation queue.
+- React mengonsumsi FastAPI melalui JSON API; frontend dan API dipasang same-origin bila memungkinkan. Cookie session dikirim sebagai credential dan tidak dapat dibaca JavaScript.
+- FastAPI membaca/menulis konten, session, progress, dan submission di MongoDB Atlas.
+- FastAPI membatasi seluruh operasi progress dan moderation berdasarkan session identity serta role server-side, serta menolak origin yang tidak diizinkan pada endpoint mutasi.
+- Tahap 2B menggunakan magic-link token sekali pakai, email transaksional, dan role moderator untuk moderation queue.
 
 ### 6.3 Antarmuka Komunikasi (Opsional)
 - API eksternal untuk AI moderasi/rekomendasi (fase lanjutan), dipanggil secara asinkron dan tidak memblokir alur utama jika gagal.
@@ -210,14 +209,14 @@ Web responsif, mobile-first, mengikuti sistem desain di `docs/DESIGN.md`.
 - Aktor: Pengguna
 - Prakondisi: Pengguna berada dalam alur cerita suatu provinsi
 - Alur utama: Pengguna membaca story node → mencapai titik keputusan → memilih opsi → cerita berlanjut ke node berikutnya → mencapai Discovery
-- Alur alternatif: Jika koneksi terputus, progres node terakhir tetap tersimpan
+- Alur alternatif: Jika API gagal menyimpan progres, sistem mempertahankan node saat ini dan menawarkan retry; tidak ada optimistic atau offline sync
 - Pascakondisi: Cerita berstatus selesai, collectible diberikan
 
 **UC-03 — Mendapatkan Collectible**
 - Aktor: Sistem, Pengguna
 - Prakondisi: Cerita provinsi telah diselesaikan
 - Alur utama: Sistem memberikan satu collectible tetap milik provinsi → menampilkan notifikasi → collectible masuk Nusa Passport
-- Pascakondisi: PassportEntry baru tercatat
+- Pascakondisi: Dokumen `progress` session memuat collectible provinsi tanpa duplikasi
 
 **UC-04 — Melihat Nusa Passport**
 - Aktor: Pengguna

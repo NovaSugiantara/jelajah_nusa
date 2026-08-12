@@ -3,7 +3,7 @@
 ## Repository State
 
 - This repository currently contains product documentation only; there is no app scaffold, package manifest, CI, or executable test/lint/build command yet.
-- Nuxt 4 and Supabase are the planned stack in `docs/SRS.md`, not an initialized or verified toolchain. Do not invent commands or dependencies before scaffolding exists.
+- FARM (FastAPI, React, MongoDB Atlas) is the planned stack in `docs/SRS.md`, not an initialized or verified toolchain. Do not invent commands or dependencies before scaffolding exists.
 - Read `docs/PRD.md` for scope, `docs/SRS.md` for functional/data/security requirements, and `docs/DESIGN.md` for UX and visual direction. Treat executable config as authoritative once it is added.
 
 ## Product Guardrails
@@ -21,9 +21,11 @@
 
 - Build mobile-first for 360px and wider while preserving desktop usability; the map must remain readable, labeled, and tappable.
 - Follow the modern Indonesian editorial direction: map-centered exploration, red/white accents, archival paper/passport/stamp motifs, and region-specific collectibles. Story comes before gamification.
-- Stage 1 stores progress locally and has no backend or aggregate KPI claim. Stage 2A introduces Supabase anonymous progress and Explorer Card sharing through Web Share with image-download fallback; do not add public share links.
+- Stage 1 uses the full FARM stack: React consumes FastAPI content/progress APIs backed by MongoDB Atlas. Progress belongs to a 30-day idle anonymous session in a secure HttpOnly cookie; do not add local progress fallback or aggregate KPI claims.
+- Block story transitions until FastAPI confirms the progress write. On API failure, keep the current node and offer retry; do not add optimistic/offline sync.
+- Stage 2A expands to 8 provinces and adds Explorer Card sharing through Web Share with image-download fallback; do not add public share links.
 - Stage 2B stores Suara Nusantara submissions without profile identity and as `pending` by default. Only moderator-approved entries become public; protect the preview/approve/reject queue with email magic link and a moderator role.
-- Supabase user progress must be isolated with RLS. Validate Suara Nusantara submissions server-side before storage or moderation.
+- FastAPI derives the anonymous or moderator identity from the server session; never trust a client-supplied user ID. Scope every progress query by that identity and validate Suara Nusantara submissions server-side before storage or moderation.
 - Cultural content requires visible sources per Discovery and approval from a relevant expert/local reviewer before publication.
 - Meet WCAG AA contrast and provide accessible alternatives/labels for map regions and interactions.
 

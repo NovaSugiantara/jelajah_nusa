@@ -58,7 +58,7 @@ Loop ini dirancang untuk terasa ringan dan dapat diulang — pengguna bisa menje
 
 - Melacak provinsi yang telah dijelajahi, cerita yang ditemukan, dan collectible yang terkumpul
 - Progress ditampilkan di peta utama dan di Nusa Passport
-- Tahap 1 menyimpan progress lokal; Tahap 2A memakai anonymous auth Supabase
+- Tahap 1 menyimpan progress melalui anonymous session FastAPI dan MongoDB Atlas
 
 ### 3.5 Nusa Passport
 
