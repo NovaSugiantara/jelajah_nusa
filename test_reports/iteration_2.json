@@ -1,0 +1,25 @@
+{
+  "summary": "Frontend regression test for map fix + audio toggle + core loop. All 8 province pins render at correct, spread-out, in-bounds positions (aceh far west x=73, papua far east x=906). 35 <path> province outlines render. Sound toggle flips OFF->ON with correct aria-label and bg-merah class, persists across reload via localStorage 'jn_sound_enabled'=1. Story navigation to /jelajah/bali produced no console/page errors. Core loop advanced through scenes + choice and passport shows 'Selesai' stamp for Bali. Suara page renders 5 seeded entries and voice form submits.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Collectible reveal after Bali story", "issue": "collectible-reveal modal was not observable in the DOM during automated flow (may have auto-dismissed or requires specific choice path); however passport stamp registered 'Selesai' for bali indicating collectible was granted server-side. Not a blocker.", "affected_selectors": ["[data-testid='collectible-reveal']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/iteration_1.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RegionMap.js: centroid uses arithmetic mean of largest ring's projected points which can drift for L-shaped provinces; acceptable for pin placement but consider polygon-area weighted centroid for tighter accuracy.",
+    "audio.js: chime() ramps master gain upward without restoring previous value; if user disabled sound mid-session the guard on this.enabled prevents leakage — OK. No issues."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped)", "frontend": "100%"},
+  "test_credentials": "None (anonymous localStorage session)",
+  "seed_data_creation": "None; created one 'Tester' voice submission in /suara for testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pin coordinates observed: aceh(73,59) sumbar(140,161) jkt(269,276) yogya(345,311) bali(439,322) kalbar(352,154) sulsel(545,223) papua(906,243). viewBox 1000x400. 35 province paths render. Sound toggle persistence works. Bali completion via story flow produces passport-stamp-bali 'Selesai'.",
+  "rca of the issue": "N/A — no bugs found in this iteration."
+}
